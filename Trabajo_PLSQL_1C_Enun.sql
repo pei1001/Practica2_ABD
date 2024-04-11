@@ -136,13 +136,33 @@ end;
 -- * P4.2: Gracias a haber añadido al código el nivel de aislamiento serializable y el uso de bloqueos exclusivos, junto con el manejo adecuado de las excepciones,	
 -- no sería posible posible que se agreguen reservas no recogidas gracias a la rigurosidad y la garantía de consistencia proporcionadas por estas medidas.
 	
--- * P4.3
+-- * P4.3: La estrategia de programación usada se basa en el enfoque de control de concurrencia y transacciones atómicas.
 --
--- * P4.4
---
--- * P4.5
--- 
+-- * P4.4: Se puede apreciar en el código en las consultas select al usar la cláusula FOR UPDATE para adquirir bloqueos exclusivos, se usa autonomous_transaction 
+-- para iniciar una transacción separada e independiente de la principal que lo llama, se usan las expeciones y el rollback para que en caso de que se detecte una
+-- excepción se deshagan todas las operaciones realizadas.	
+	
+-- * P4.5: Otra opción para solucionar el problema tratado sería utilizar un enfoque basado en colas o bloqueos a nivel de aplicación para coordinar las operaciones 
+-- de reserva y evitar los problemas de concurrencia. 
+-- PSEUDOCÓDIGO
+-- Procedimiento reservar_evento(arg_NIF_cliente, arg_nombre_evento, arg_fecha):
+--    // Adquirir un bloqueo a nivel de aplicación para coordinar las operaciones de reserva
+--    adquirir_bloqueo_aplicacion()
 
+--    // Verificar la disponibilidad de asientos y el saldo del abono
+--    si asientos_disponibles < 1 o saldo_abono < 1:
+--        liberar_bloqueo_aplicacion()
+--        devolver error
+
+--    // Realizar la reserva
+--    actualizar_saldo_abono()
+--    actualizar_asientos_disponibles()
+--    crear_reserva()
+
+--    // Liberar el bloqueo a nivel de aplicación
+--    liberar_bloqueo_aplicacion()
+
+Fin del procedimiento
 
 create or replace
 procedure reset_seq( p_seq_name varchar )
