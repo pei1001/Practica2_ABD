@@ -1,3 +1,5 @@
+-- Link github: https://github.com/pei1001/Practica2_ABD
+
 drop table clientes cascade constraints;
 drop table abonos   cascade constraints;
 drop table eventos  cascade constraints;
@@ -47,12 +49,14 @@ create table reservas(
 
 
 	
+
 -- Procedimiento a implementar para realizar la reserva
-create or replace procedure reservar_evento( arg_NIF_cliente varchar,
- arg_nombre_evento varchar, arg_fecha date) is
+create or replace procedure reservar_evento(
+    arg_NIF_cliente varchar,
+    arg_nombre_evento varchar,
+    arg_fecha date
+) is
     pragma autonomous_transaction; -- Marcar la transacción como autónoma para tener un nivel de aislamiento de transacción independiente
-    v_evento_pasado EXCEPTION;
-    PRAGMA EXCEPTION_INIT(v_evento_pasado, -20001);
     v_evento_id eventos.id_evento%TYPE;
     v_saldo_abono abonos.saldo%TYPE;
     v_asientos_disponibles eventos.asientos_disponibles%TYPE;
@@ -61,71 +65,87 @@ begin
     -- Establecer el nivel de aislamiento de transacción a SERIALIZABLE
     execute immediate 'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE';
 
-    -- Iniciar la transacción
     begin
-        -- Bloquear la fila correspondiente al evento para escritura
-        select id_evento, fecha, asientos_disponibles
-        into v_evento_id, v_asientos_disponibles, v_evento_fecha
-        from eventos
-        where nombre_evento = arg_nombre_evento
-        for update nowait; -- Bloqueo exclusivo sin esperar
-
-        -- Comprobar si el evento ya pasó
-        if v_evento_fecha < sysdate then
+        -- Verificar si la fecha del evento es posterior a la fecha actual
+        if arg_fecha < sysdate then
             raise_application_error(-20001, 'No se pueden reservar eventos pasados.');
         end if;
 
-        -- Comprobar si el evento existe
+        -- Bloquear la fila correspondiente al evento para escritura
+        select id_evento, asientos_disponibles
+        into v_evento_id, v_asientos_disponibles
+        from eventos
+        where nombre_evento = arg_nombre_evento
+          and fecha >= trunc(sysdate) -- Solo eventos futuros
+        for update nowait;
+
         if v_evento_id is null then
             raise_application_error(-20003, 'El evento ' || arg_nombre_evento || ' no existe.');
         end if;
 
+    exception
+        when NO_DATA_FOUND then
+            rollback;
+            raise_application_error(-20003, 'El evento ' || arg_nombre_evento || ' no existe.');
+    end;
+
+    begin
         -- Bloquear la fila correspondiente al cliente para escritura
         select saldo
         into v_saldo_abono
         from abonos
         where cliente = arg_NIF_cliente
-        for update nowait; -- Bloqueo exclusivo sin esperar
+        for update nowait;
 
         -- Comprobar si el cliente existe
         if v_saldo_abono is null then
             raise_application_error(-20002, 'Cliente inexistente.');
         end if;
-
-        -- Comprobar si hay asientos disponibles y el cliente tiene saldo suficiente
-        if v_asientos_disponibles <= 0 then
-            raise_application_error(-20005, 'No hay asientos disponibles para el evento.');
-        elsif v_saldo_abono <= 0 then
-            raise_application_error(-20004, 'Saldo en abono insuficiente.');
-        end if;
-
-        -- Actualizar el saldo del abono del cliente
-        update abonos
-        set saldo = saldo - 1
-        where cliente = arg_NIF_cliente;
-
-        -- Actualizar el número de plazas disponibles para el evento
-        update eventos
-        set asientos_disponibles = asientos_disponibles - 1
-        where id_evento = v_evento_id;
-
-        -- Obtener el próximo ID de reserva
-        select seq_reservas.nextval into v_reserva_id from dual;
-
-        -- Insertar la reserva en la tabla de reservas
-        insert into reservas(id_reserva, cliente, evento, abono, fecha)
-        values (v_reserva_id, arg_NIF_cliente, v_evento_id, v_saldo_abono, arg_fecha);
-
+       
     exception
-        when others then
-            rollback; -- Deshacer la transacción en caso de error
-            raise;
+        when NO_DATA_FOUND then
+            rollback;
+            raise_application_error(-20002, 'Cliente inexistente.');
     end;
+    
+    -- Comprobar si hay asientos disponibles y el cliente tiene saldo suficiente
+    if v_asientos_disponibles <= 0 then
+        raise_application_error(-20005, 'No hay asientos disponibles para el evento.');
+    elsif v_saldo_abono <= 0 then
+        raise_application_error(-20004, 'Saldo en abono insuficiente.');
+    end if;
 
-    -- Confirmar la transacción
+    -- Actualizar el saldo del abono del cliente
+    update abonos
+    set saldo = saldo - 1
+    where cliente = arg_NIF_cliente;
+
+   -- Actualizar el número de plazas disponibles para el evento
+    update eventos
+    set asientos_disponibles = asientos_disponibles - 1
+    where id_evento = v_evento_id;
+
+    -- Obtener el próximo ID de reserva
+    select seq_reservas.nextval into v_reserva_id from dual;
+
+    -- Insertar la reserva en la tabla de reservas
+    insert into reservas(id_reserva, cliente, evento, fecha)
+    values (v_reserva_id, arg_NIF_cliente, v_evento_id, arg_fecha);
+
     commit;
+exception
+    when others then
+        rollback;
+        raise;
 end;
 /
+
+
+
+
+
+
+
 
 
 ------ Deja aquí tus respuestas a las preguntas del enunciado:
@@ -162,7 +182,7 @@ end;
 --    // Liberar el bloqueo a nivel de aplicación
 --    liberar_bloqueo_aplicacion()
 
-Fin del procedimiento
+
 
 create or replace
 procedure reset_seq( p_seq_name varchar )
@@ -214,75 +234,57 @@ end;
 
 exec inicializa_test;
 
--- Completa el test
 
+
+-- Procedimiento de prueba
 create or replace procedure test_reserva_evento is
 begin
-	 
-  --caso 1 Reserva correcta, se realiza
-  begin
-    reservar_evento('12345678A', 'concierto_la_moda', date '2024-6-27');
-    dbms_output.put_line('Caso 1: Reserva correcta, se realizó.');
-  exception
-    when others then
-        dbms_output.put_line('Caso 1: Error - ' || SQLCODE || ': ' || SQLERRM);
-  end;
+    -- Caso 1: Reserva correcta, se realiza
+    begin
+        reservar_evento('12345678A', 'concierto_la_moda', date '2024-06-27');
+        dbms_output.put_line('T1. Si se intenta realizar una reserva con valores correctos, la reserva se realiza.');
+    exception
+        when others then
+            dbms_output.put_line('T1. Error - ' || SQLCODE || ': ' || SQLERRM);
+    end;
   
-  --caso 2 Evento pasado
-  begin
-    reservar_evento('12345678A', 'concierto_la_moda', date '2023-6-27');
-    dbms_output.put_line('Caso 2: Error - No se pueden reservar eventos pasados (No se lanzó la excepción esperada).');
-  exception
-    when others then
-        if SQLCODE = -20001 then
-            dbms_output.put_line('Caso 2: Excepción esperada - ' || SQLCODE || ': ' || SQLERRM);
-        else
-            dbms_output.put_line('Caso 2: Error - ' || SQLCODE || ': ' || SQLERRM);
-        end if;
-  end;
+    -- Caso 2: Evento pasado
+    begin
+        reservar_evento('12345678A', 'concierto_la_moda', date '2023-06-27');
+        dbms_output.put_line('T2. Error - No se pueden reservar eventos pasados.');
+    exception
+        when others then
+            dbms_output.put_line('T2. Error - ' || SQLCODE || ': ' || SQLERRM);
+    end;
   
-  --caso 3 Evento inexistente
-  begin
-    reservar_evento('12345678A', 'evento_inexistente', date '2024-6-27');
-    dbms_output.put_line('Caso 3: Error - El evento no existe (No se lanzó la excepción esperada).');
-  exception
-    when others then
-        if SQLCODE = -20003 then
-            dbms_output.put_line('Caso 3: Excepción esperada - ' || SQLCODE || ': ' || SQLERRM);
-        else
-            dbms_output.put_line('Caso 3: Error - ' || SQLCODE || ': ' || SQLERRM);
-        end if;
-  end;
+    -- Caso 3: Evento inexistente
+    begin
+        reservar_evento('12345678A', 'evento_inexistente', date '2024-06-27');
+        dbms_output.put_line('T3. Error - El evento no existe.');
+    exception
+        when others then
+            dbms_output.put_line('T3. Error - ' || SQLCODE || ': ' || SQLERRM);
+    end;
   
-  --caso 4 Cliente inexistente  
-  begin
-    reservar_evento('cliente_inexistente', 'concierto_la_moda', date '2024-6-27');
-    dbms_output.put_line('Caso 4: Error - Cliente inexistente (No se lanzó la excepción esperada).');
-  exception
-    when others then
-        if SQLCODE = -20002 then
-            dbms_output.put_line('Caso 4: Excepción esperada - ' || SQLCODE || ': ' || SQLERRM);
-        else
-            dbms_output.put_line('Caso 4: Error - ' || SQLCODE || ': ' || SQLERRM);
-        end if;
-  end;
+    -- Caso 4: Cliente inexistente  
+    begin
+        reservar_evento('cliente_inexistente', 'concierto_la_moda', date '2024-06-27');
+        dbms_output.put_line('T4. Si se intenta hacer una reserva a un cliente inexistente devuelve el error -20002, con el mensaje de error "Cliente inexistente".');
+    exception
+        when others then
+            dbms_output.put_line('T4. Error - ' || SQLCODE || ': ' || SQLERRM);
+    end;
   
-  --caso 5 El cliente no tiene saldo suficiente
-  begin
-    reservar_evento('11111111B', 'concierto_la_moda', date '2024-6-27');
-    dbms_output.put_line('Caso 5: Error - Saldo en abono insuficiente (No se lanzó la excepción esperada).');
-  exception
-    when others then
-        if SQLCODE = -20004 then
-            dbms_output.put_line('Caso 5: Excepción esperada - ' || SQLCODE || ': ' || SQLERRM);
-        else
-            dbms_output.put_line('Caso 5: Error - ' || SQLCODE || ': ' || SQLERRM);
-        end if;
-  end;
+    -- Caso 5: El cliente no tiene saldo suficiente
+    begin
+        reservar_evento('11111111B', 'concierto_la_moda', date '2024-06-27');
+        dbms_output.put_line('T5. Error - Saldo en abono insuficiente.');
+    exception
+        when others then
+            dbms_output.put_line('T5. Error - ' || SQLCODE || ': ' || SQLERRM);
+    end;
 end;
 /
-
-
 
 set serveroutput on;
 exec test_reserva_evento;
