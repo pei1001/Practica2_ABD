@@ -132,8 +132,10 @@ end;
 -- * P4.1: Sí, la comprobación hecha en el paso 2 seguirá siendo fiable al realizar las operaciones en una misma transacción evitando así problemas manejando 
 -- el control de concurrencia. En el paso 2 se comprueban los campos necesarios para poder realizar la reserva y en el paso 3 las acciones necesarias para 
 -- llevarla a cabo con los bloqueos necesarios para evitar problemas.
--- * P4.2
---
+	
+-- * P4.2: Gracias a haber añadido al código el nivel de aislamiento serializable y el uso de bloqueos exclusivos, junto con el manejo adecuado de las excepciones,	
+-- no sería posible posible que se agreguen reservas no recogidas gracias a la rigurosidad y la garantía de consistencia proporcionadas por estas medidas.
+	
 -- * P4.3
 --
 -- * P4.4
