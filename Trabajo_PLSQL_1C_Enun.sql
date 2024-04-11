@@ -221,34 +221,67 @@ begin
 	 
   --caso 1 Reserva correcta, se realiza
   begin
-    inicializa_test;
+    reservar_evento('12345678A', 'concierto_la_moda', date '2024-6-27');
+    dbms_output.put_line('Caso 1: Reserva correcta, se realizó.');
+  exception
+    when others then
+        dbms_output.put_line('Caso 1: Error - ' || SQLCODE || ': ' || SQLERRM);
   end;
-  
   
   --caso 2 Evento pasado
   begin
-    inicializa_test;
+    reservar_evento('12345678A', 'concierto_la_moda', date '2023-6-27');
+    dbms_output.put_line('Caso 2: Error - No se pueden reservar eventos pasados (No se lanzó la excepción esperada).');
+  exception
+    when others then
+        if SQLCODE = -20001 then
+            dbms_output.put_line('Caso 2: Excepción esperada - ' || SQLCODE || ': ' || SQLERRM);
+        else
+            dbms_output.put_line('Caso 2: Error - ' || SQLCODE || ': ' || SQLERRM);
+        end if;
   end;
   
   --caso 3 Evento inexistente
   begin
-    inicializa_test;
+    reservar_evento('12345678A', 'evento_inexistente', date '2024-6-27');
+    dbms_output.put_line('Caso 3: Error - El evento no existe (No se lanzó la excepción esperada).');
+  exception
+    when others then
+        if SQLCODE = -20003 then
+            dbms_output.put_line('Caso 3: Excepción esperada - ' || SQLCODE || ': ' || SQLERRM);
+        else
+            dbms_output.put_line('Caso 3: Error - ' || SQLCODE || ': ' || SQLERRM);
+        end if;
   end;
   
-
   --caso 4 Cliente inexistente  
   begin
-    inicializa_test;
+    reservar_evento('cliente_inexistente', 'concierto_la_moda', date '2024-6-27');
+    dbms_output.put_line('Caso 4: Error - Cliente inexistente (No se lanzó la excepción esperada).');
+  exception
+    when others then
+        if SQLCODE = -20002 then
+            dbms_output.put_line('Caso 4: Excepción esperada - ' || SQLCODE || ': ' || SQLERRM);
+        else
+            dbms_output.put_line('Caso 4: Error - ' || SQLCODE || ': ' || SQLERRM);
+        end if;
   end;
   
   --caso 5 El cliente no tiene saldo suficiente
   begin
-    inicializa_test;
+    reservar_evento('11111111B', 'concierto_la_moda', date '2024-6-27');
+    dbms_output.put_line('Caso 5: Error - Saldo en abono insuficiente (No se lanzó la excepción esperada).');
+  exception
+    when others then
+        if SQLCODE = -20004 then
+            dbms_output.put_line('Caso 5: Excepción esperada - ' || SQLCODE || ': ' || SQLERRM);
+        else
+            dbms_output.put_line('Caso 5: Error - ' || SQLCODE || ': ' || SQLERRM);
+        end if;
   end;
-
-  
 end;
 /
+
 
 
 set serveroutput on;
