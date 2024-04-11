@@ -100,8 +100,8 @@ end;
 /
 
 ------ Deja aquí tus respuestas a las preguntas del enunciado:
--- * P4.1
---
+-- * P4.1: Sí, la comprobación hecha en el paso 2 seguirá siendo fiable al realizar las operaciones en una misma transacción evitando así problemas manejando 
+-- el control de concurrencia. En el paso 2 se comprueban los campos necesarios para poder realizar la reserva y en el paso 3 las acciones necesarias para llevarla a cabo.
 -- * P4.2
 --
 -- * P4.3
