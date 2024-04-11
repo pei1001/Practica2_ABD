@@ -50,8 +50,19 @@ create table reservas(
 -- Procedimiento a implementar para realizar la reserva
 create or replace procedure reservar_evento( arg_NIF_cliente varchar,
  arg_nombre_evento varchar, arg_fecha date) is
- begin
-  null;
+ v_evento_pasado EXCEPTION;
+    PRAGMA EXCEPTION_INIT(v_evento_pasado, -20001);
+    v_evento_fecha date;
+begin
+    -- Obtener la fecha del evento
+    select fecha into v_evento_fecha
+    from eventos
+    where nombre_evento = arg_nombre_evento;
+
+    -- Comprobar si el evento ya pasó
+    if v_evento_fecha < sysdate then
+        raise_application_error(-20001, 'No se pueden reservar eventos pasados.');
+    end if;
 end;
 /
 
