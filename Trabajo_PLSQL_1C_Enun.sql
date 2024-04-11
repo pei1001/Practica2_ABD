@@ -52,16 +52,49 @@ create or replace procedure reservar_evento( arg_NIF_cliente varchar,
  arg_nombre_evento varchar, arg_fecha date) is
  v_evento_pasado EXCEPTION;
     PRAGMA EXCEPTION_INIT(v_evento_pasado, -20001);
-    v_evento_fecha date;
+    v_evento_id eventos.id_evento%TYPE;
+    v_saldo_abono abonos.saldo%TYPE;
+    v_asientos_disponibles eventos.asientos_disponibles%TYPE;
+    v_evento_fecha eventos.fecha%TYPE;
 begin
-    -- Obtener la fecha del evento
-    select fecha into v_evento_fecha
+    -- Obtener el ID del evento
+    select id_evento, fecha
+    into v_evento_id, v_evento_fecha
     from eventos
     where nombre_evento = arg_nombre_evento;
 
     -- Comprobar si el evento ya pasó
     if v_evento_fecha < sysdate then
         raise_application_error(-20001, 'No se pueden reservar eventos pasados.');
+    end if;
+
+    -- Comprobar si el evento existe
+    if v_evento_id is null then
+        raise_application_error(-20003, 'El evento ' || arg_nombre_evento || ' no existe.');
+    end if;
+
+    -- Obtener el saldo del cliente
+    select saldo
+    into v_saldo_abono
+    from abonos
+    where cliente = arg_NIF_cliente;
+
+    -- Comprobar si el cliente existe
+    if v_saldo_abono is null then
+        raise_application_error(-20002, 'Cliente inexistente.');
+    end if;
+
+    -- Obtener los asientos disponibles para el evento
+    select asientos_disponibles
+    into v_asientos_disponibles
+    from eventos
+    where id_evento = v_evento_id;
+
+    -- Comprobar si hay asientos disponibles y el cliente tiene saldo suficiente
+    if v_asientos_disponibles <= 0 then
+        raise_application_error(-20005, 'No hay asientos disponibles para el evento.');
+    elsif v_saldo_abono <= 0 then
+        raise_application_error(-20004, 'Saldo en abono insuficiente.');
     end if;
 end;
 /
