@@ -50,52 +50,76 @@ create table reservas(
 -- Procedimiento a implementar para realizar la reserva
 create or replace procedure reservar_evento( arg_NIF_cliente varchar,
  arg_nombre_evento varchar, arg_fecha date) is
- v_evento_pasado EXCEPTION;
+    v_evento_pasado EXCEPTION;
     PRAGMA EXCEPTION_INIT(v_evento_pasado, -20001);
     v_evento_id eventos.id_evento%TYPE;
     v_saldo_abono abonos.saldo%TYPE;
     v_asientos_disponibles eventos.asientos_disponibles%TYPE;
-    v_evento_fecha eventos.fecha%TYPE;
+    v_reserva_id reservas.id_reserva%TYPE;
 begin
-    -- Obtener el ID del evento
-    select id_evento, fecha
-    into v_evento_id, v_evento_fecha
-    from eventos
-    where nombre_evento = arg_nombre_evento;
+    -- Iniciar la transacción
+    begin
+        -- Bloquear la fila correspondiente al evento para escritura
+        select id_evento, fecha, asientos_disponibles
+        into v_evento_id, v_asientos_disponibles, v_evento_fecha
+        from eventos
+        where nombre_evento = arg_nombre_evento
+        for update nowait; -- Bloqueo exclusivo sin esperar
 
-    -- Comprobar si el evento ya pasó
-    if v_evento_fecha < sysdate then
-        raise_application_error(-20001, 'No se pueden reservar eventos pasados.');
-    end if;
+        -- Comprobar si el evento ya pasó
+        if v_evento_fecha < sysdate then
+            raise_application_error(-20001, 'No se pueden reservar eventos pasados.');
+        end if;
 
-    -- Comprobar si el evento existe
-    if v_evento_id is null then
-        raise_application_error(-20003, 'El evento ' || arg_nombre_evento || ' no existe.');
-    end if;
+        -- Comprobar si el evento existe
+        if v_evento_id is null then
+            raise_application_error(-20003, 'El evento ' || arg_nombre_evento || ' no existe.');
+        end if;
 
-    -- Obtener el saldo del cliente
-    select saldo
-    into v_saldo_abono
-    from abonos
-    where cliente = arg_NIF_cliente;
+        -- Bloquear la fila correspondiente al cliente para escritura
+        select saldo
+        into v_saldo_abono
+        from abonos
+        where cliente = arg_NIF_cliente
+        for update nowait; -- Bloqueo exclusivo sin esperar
 
-    -- Comprobar si el cliente existe
-    if v_saldo_abono is null then
-        raise_application_error(-20002, 'Cliente inexistente.');
-    end if;
+        -- Comprobar si el cliente existe
+        if v_saldo_abono is null then
+            raise_application_error(-20002, 'Cliente inexistente.');
+        end if;
 
-    -- Obtener los asientos disponibles para el evento
-    select asientos_disponibles
-    into v_asientos_disponibles
-    from eventos
-    where id_evento = v_evento_id;
+        -- Comprobar si hay asientos disponibles y el cliente tiene saldo suficiente
+        if v_asientos_disponibles <= 0 then
+            raise_application_error(-20005, 'No hay asientos disponibles para el evento.');
+        elsif v_saldo_abono <= 0 then
+            raise_application_error(-20004, 'Saldo en abono insuficiente.');
+        end if;
 
-    -- Comprobar si hay asientos disponibles y el cliente tiene saldo suficiente
-    if v_asientos_disponibles <= 0 then
-        raise_application_error(-20005, 'No hay asientos disponibles para el evento.');
-    elsif v_saldo_abono <= 0 then
-        raise_application_error(-20004, 'Saldo en abono insuficiente.');
-    end if;
+        -- Actualizar el saldo del abono del cliente
+        update abonos
+        set saldo = saldo - 1
+        where cliente = arg_NIF_cliente;
+
+        -- Actualizar el número de plazas disponibles para el evento
+        update eventos
+        set asientos_disponibles = asientos_disponibles - 1
+        where id_evento = v_evento_id;
+
+        -- Obtener el próximo ID de reserva
+        select seq_reservas.nextval into v_reserva_id from dual;
+
+        -- Insertar la reserva en la tabla de reservas
+        insert into reservas(id_reserva, cliente, evento, abono, fecha)
+        values (v_reserva_id, arg_NIF_cliente, v_evento_id, v_saldo_abono, arg_fecha);
+
+    exception
+        when others then
+            rollback; -- Deshacer la transacción en caso de error
+            raise;
+    end;
+
+    -- Confirmar la transacción
+    commit;
 end;
 /
 
