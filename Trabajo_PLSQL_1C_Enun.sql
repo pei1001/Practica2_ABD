@@ -50,6 +50,7 @@ create table reservas(
 -- Procedimiento a implementar para realizar la reserva
 create or replace procedure reservar_evento( arg_NIF_cliente varchar,
  arg_nombre_evento varchar, arg_fecha date) is
+    pragma autonomous_transaction; -- Marcar la transacción como autónoma para tener un nivel de aislamiento de transacción independiente
     v_evento_pasado EXCEPTION;
     PRAGMA EXCEPTION_INIT(v_evento_pasado, -20001);
     v_evento_id eventos.id_evento%TYPE;
@@ -57,6 +58,9 @@ create or replace procedure reservar_evento( arg_NIF_cliente varchar,
     v_asientos_disponibles eventos.asientos_disponibles%TYPE;
     v_reserva_id reservas.id_reserva%TYPE;
 begin
+    -- Establecer el nivel de aislamiento de transacción a SERIALIZABLE
+    execute immediate 'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE';
+
     -- Iniciar la transacción
     begin
         -- Bloquear la fila correspondiente al evento para escritura
@@ -123,9 +127,11 @@ begin
 end;
 /
 
+
 ------ Deja aquí tus respuestas a las preguntas del enunciado:
 -- * P4.1: Sí, la comprobación hecha en el paso 2 seguirá siendo fiable al realizar las operaciones en una misma transacción evitando así problemas manejando 
--- el control de concurrencia. En el paso 2 se comprueban los campos necesarios para poder realizar la reserva y en el paso 3 las acciones necesarias para llevarla a cabo.
+-- el control de concurrencia. En el paso 2 se comprueban los campos necesarios para poder realizar la reserva y en el paso 3 las acciones necesarias para 
+-- llevarla a cabo con los bloqueos necesarios para evitar problemas.
 -- * P4.2
 --
 -- * P4.3
